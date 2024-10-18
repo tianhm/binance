@@ -1,9 +1,10 @@
 const { USDMClient } = require('binance');
 
+  // This example shows how to call this Binance API endpoint with either node.js, javascript (js) or typescript (ts) with the npm module "binance" for Binance exchange
+  // This Binance API SDK is available on npm via "npm install binance"
   // ENDPOINT: fapi/v1/trade/asyn/id
   // METHOD: GET
   // PUBLIC: NO
-  // Link to function: https://github.com/tiagosiebler/binance/blob/master/src/usdm-client.ts#L578
 
 const client = new USDMClient({
   apiKey: 'insert_api_key_here',
@@ -11,9 +12,9 @@ const client = new USDMClient({
 });
 
 client.getFuturesTradeDownloadLink(params)
-  .then(response => {
+  .then((response) => {
     console.log(response);
   })
-  .catch(error => {
+  .catch((error) => {
     console.error(error);
   });
