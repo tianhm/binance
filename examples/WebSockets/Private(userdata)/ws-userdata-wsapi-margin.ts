@@ -162,8 +162,6 @@ async function main() {
       // the `subscribeUserDataStream()` method again if reconnected (if you called it before):
       // resubscribeUserDataStreamAfterReconnect: true,
 
-      keepMarginListenTokenRefreshed: false, // Optional, if you don't want the SDK to automatically refresh your margin listen token (if you use it for subscribing to margin user data stream)
-
       // If you want your own event handlers instead of the default ones with logs, disable this setting and see the `attachEventHandlers` example below:
       attachEventListeners: false,
     },
@@ -183,7 +181,8 @@ async function main() {
   // automatically call this method again if reconnected,
   try {
     const response = await wsClient.subscribeUserDataStream(
-      WS_KEY_MAP.mainWSAPI, // The `mainWSAPI` wsKey will connect to the "spot" Websocket API on Binance.
+      // The `marginUserData` wsKey will connect to the cross margin Websocket API on Binance.
+      WS_KEY_MAP.marginUserData,
     );
 
     console.log('subscribeUserDataStream response: ', response);

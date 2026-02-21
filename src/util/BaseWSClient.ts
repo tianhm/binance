@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import EventEmitter from 'events';
 import WebSocket from 'isomorphic-ws';
@@ -44,8 +43,10 @@ interface WSClientEventMap<WsKey extends string> {
     wsUrl: string;
     ws: WebSocket;
   }) => void;
+
   /** Reconnecting a dropped connection */
   reconnecting: (evt: { wsKey: WsKey; event: any }) => void;
+
   /** Successfully reconnected a connection that dropped */
   reconnected: (evt: {
     wsKey: WsKey;
@@ -53,31 +54,38 @@ interface WSClientEventMap<WsKey extends string> {
     wsUrl: string;
     ws: WebSocket;
   }) => void;
+
   /** Connection closed */
   close: (evt: { wsKey: WsKey; event: any }) => void;
+
   /**
    * @deprecated Use the 'response' event instead.
    */
   reply: UseTheResponseEventInstead;
+
   /** Received reply to websocket command (e.g. after subscribing to topics) */
   response: (
     response: any & { wsKey: WsKey; isWSAPIResponse?: boolean },
   ) => void;
+
   /** Received data for topic */
   message: (response: WsRawMessage) => void;
   formattedMessage: (response: WsFormattedMessage) => void;
   formattedUserDataMessage: (response: WsUserDataEvents) => void;
+
   /**
    * See for more information: https://github.com/tiagosiebler/bybit-api/issues/413
    * @deprecated Use the 'exception' event instead. The 'error' event had the unintended consequence of throwing an unhandled promise rejection.
    */
   error: UseTheExceptionEventInstead;
+
   /**
    * Exception from ws client OR custom listeners (e.g. if you throw inside your event handler)
    */
   exception: (
     response: any & { wsKey: WsKey; isWSAPIResponse?: boolean },
   ) => void;
+
   /** Confirmation that a connection successfully authenticated */
   authenticated: (event: {
     wsKey: WsKey;
@@ -98,7 +106,7 @@ export interface EmittableEvent<
 // Type safety for on and emit handlers: https://stackoverflow.com/a/61609010/880837
 export interface BaseWebsocketClient<
   TWSKey extends string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   TWSRequestEvent extends object,
 > {
   on<U extends keyof WSClientEventMap<TWSKey>>(

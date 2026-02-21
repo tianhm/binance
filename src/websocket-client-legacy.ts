@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-declaration-merging */
 import { EventEmitter } from 'events';
 import WebSocket from 'isomorphic-ws';

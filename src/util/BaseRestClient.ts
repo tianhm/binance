@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axios, { AxiosError, AxiosRequestConfig, Method } from 'axios';
 // NOTE: https.Agent is Node.js-only and not available in browser environments
 // Browser builds (via webpack) exclude this module - see webpack.config.js fallback settings
@@ -123,7 +124,7 @@ export default abstract class BaseRestClient {
     }
 
     //  WebCryptoAPI feature
-    /* 
+    /*
     if (this.key && this.secret) {
       // Provide a user friendly error message if the user is using an outdated Node.js version (where Web Crypto API is not available).
       // A few users have been caught out by using the end-of-life Node.js v18 release.

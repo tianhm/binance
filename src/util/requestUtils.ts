@@ -100,6 +100,7 @@ export interface RestClientOptions {
   customSignMessageFn?: (message: string, secret: string) => Promise<string>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type GenericAPIResponse<T = any> = Promise<T>;
 
 // function throwUnhandledSwitch(x: never, msg: string): never {
@@ -265,6 +266,7 @@ export function requiresWSAPINewClientOID(
     case WS_KEY_MAP.eoptions:
     case WS_KEY_MAP.portfolioMarginUserData:
     case WS_KEY_MAP.portfolioMarginProUserData:
+    case WS_KEY_MAP.marginUserData:
       return false;
 
     default: {
@@ -338,6 +340,7 @@ export function serialiseParams(
 
 export interface SignedRequestState {
   // Request body as an object, as originally provided by caller
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestBody: any;
   // Params serialised into a query string, including timestamp and revvwindow
   serialisedParams: string | undefined;
@@ -584,6 +587,7 @@ export function isPublicEndpoint(endpoint: string): boolean {
   return false;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function isWsPong(response: any) {
   return (
     response.request &&
@@ -614,6 +618,7 @@ export function logInvalidOrderId(
  * - For the new multiplex Websocketclient, this is extracted using the "stream" parameter.
  */
 export function appendEventIfMissing(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   wsMsg: any,
   wsKey: WsKey,
   eventType: string | undefined,

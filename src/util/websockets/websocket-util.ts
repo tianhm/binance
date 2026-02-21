@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import WebSocket from 'isomorphic-ws';
 
@@ -45,6 +46,10 @@ export const WS_KEY_MAP = {
 
   // https://developers.binance.com/docs/margin_trading/risk-data-stream
   marginRiskUserData: 'marginRiskUserData',
+
+  // https://developers.binance.com/docs/margin_trading/trade-data-stream
+  // Used for the margin user data stream, via the WebSocket API, via the listenToken mechanic.
+  marginUserData: 'marginUserData',
 
   // https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams
   // market data, user data
@@ -112,7 +117,8 @@ export type WsKey = (typeof WS_KEY_MAP)[keyof typeof WS_KEY_MAP];
 export type WSAPIWsKeyMain =
   | typeof WS_KEY_MAP.mainWSAPI
   | typeof WS_KEY_MAP.mainWSAPI2
-  | typeof WS_KEY_MAP.mainWSAPITestnet;
+  | typeof WS_KEY_MAP.mainWSAPITestnet
+  | typeof WS_KEY_MAP.marginUserData;
 
 export type WSAPIWsKeyFutures =
   | typeof WS_KEY_MAP.usdmWSAPI
@@ -140,6 +146,9 @@ export const WS_KEY_URL_MAP: Record<WsKey, string> = {
   // https://developers.binance.com/docs/margin_trading/risk-data-stream
   // Margin websocket only support Cross Margin Accounts
   marginRiskUserData: 'wss://margin-stream.binance.com',
+
+  // New margin WS API endpoint with listenToken mechanic
+  marginUserData: 'wss://ws-api.binance.com:443',
 
   // https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams
   // market data, user data
@@ -191,6 +200,7 @@ export const WS_KEY_MM_URL_MAP: Record<WsKey, string | undefined> = {
   mainWSAPI2: undefined,
   mainWSAPITestnet: undefined,
   marginRiskUserData: undefined,
+  marginUserData: undefined,
 
   // USDM Futures MM endpoints
   usdm: 'wss://fstream-mm.binance.com',
@@ -227,6 +237,7 @@ export const WS_KEY_DEMO_URL_MAP: Record<WsKey, string | undefined> = {
 
   // Margin Risk - no demo endpoint
   marginRiskUserData: undefined,
+  marginUserData: undefined,
 
   // Demo Trading - USDM Futures
   usdm: 'wss://fstream.binancefuture.com',
@@ -273,7 +284,8 @@ export function getWsURLSuffix(
     }
     case 'mainWSAPITestnet':
     case 'mainWSAPI':
-    case 'mainWSAPI2': {
+    case 'mainWSAPI2':
+    case 'marginUserData': {
       return '/ws-api/v3';
     }
     case 'usdm':
@@ -397,6 +409,7 @@ export function getTestnetWsKey(wsKey: WsKey): WsKey {
     }
 
     case WS_KEY_MAP.marginRiskUserData:
+    case WS_KEY_MAP.marginUserData:
     case WS_KEY_MAP.eoptions:
     case WS_KEY_MAP.portfolioMarginUserData:
     case WS_KEY_MAP.portfolioMarginProUserData: {
@@ -647,6 +660,8 @@ export function resolveUserDataMarketForWsKey(wsKey: WsKey): WsMarket {
     case 'portfolioMarginUserData':
     case 'portfolioMarginProUserData':
       return 'portfoliom';
+    case 'marginUserData':
+      return 'crossMargin';
     default: {
       throw neverGuard(
         wsKey,

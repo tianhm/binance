@@ -174,6 +174,7 @@ export const WS_API_Operations = [
   'userDataStream.subscribe',
   'userDataStream.subscribe.signature',
   'userDataStream.unsubscribe',
+  'userDataStream.subscribe.listenToken',
 ] as const;
 
 export interface WSAPIUserDataListenKeyRequest {
@@ -185,6 +186,7 @@ export type WsAPIOperation = (typeof WS_API_Operations)[number];
 
 export interface WsRequestOperationBinance<
   TWSTopic extends string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TWSParams extends object = any,
 > {
   method: WsOperation | WsAPIOperation;
@@ -209,6 +211,7 @@ export interface WSAPIResponse<TResponseData extends object = object> {
   wsKey: WsKey;
   isWSAPIResponse: boolean;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request?: any;
 }
 
@@ -232,6 +235,7 @@ export interface WsAPIWsKeyTopicMap {
   [WS_KEY_MAP.mainTestnetUserData]: WsOperation;
 
   [WS_KEY_MAP.marginRiskUserData]: WsOperation;
+  [WS_KEY_MAP.marginUserData]: WsAPIOperation;
   [WS_KEY_MAP.usdm]: WsOperation;
   [WS_KEY_MAP.usdmTestnet]: WsOperation;
 
@@ -422,6 +426,11 @@ export interface WsAPITopicRequestParamMap<TWSKey = WsKey> {
   'userDataStream.subscribe': void;
   'userDataStream.subscribe.signature': { timestamp: number };
   'userDataStream.unsubscribe': void;
+
+  /**
+   * User data streams, margin:
+   */
+  'userDataStream.subscribe.listenToken': { listenToken: string };
 }
 /**
  * Response structure expected for each operation

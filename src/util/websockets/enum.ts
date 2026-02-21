@@ -9,6 +9,7 @@ export const WS_ERROR_CODE = {
   INVALID_API_KEY_OR_IP_OR_PERMISSIONS: -2015,
 } as const;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function isFatalWSError(e: any): boolean {
   if (typeof e?.error?.code === 'number') {
     const errorCode = e.error.code;

@@ -179,6 +179,7 @@ export interface WSClientConfigurableOptions {
 
   wsOptions?: {
     protocols?: string[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     agent?: any;
   } & Partial<WebSocket.ClientOptions | ClientRequestArgs>;
 

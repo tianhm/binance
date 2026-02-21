@@ -24,6 +24,7 @@ import {
   WsUserDataEvents,
 } from '../types/websockets/ws-events-formatted';
 import {
+  WsEventStreamTerminatedRaw,
   WsMessage24hrMiniTickerRaw,
   WsMessageFuturesUserDataAccountConfigUpdateEventRaw,
   WsMessageFuturesUserDataAccountUpdateRaw,
@@ -72,7 +73,8 @@ export function isWSAPIWsKey(wsKey: WsKey): wsKey is WSAPIWsKey {
     case 'usdmWSAPI':
     case 'usdmWSAPITestnet':
     case 'coinmWSAPI':
-    case 'coinmWSAPITestnet': {
+    case 'coinmWSAPITestnet':
+    case 'marginUserData': {
       return true;
     }
     case 'main':
@@ -449,6 +451,15 @@ export function isAccountUpdateRaw(
   data: WsRawMessage,
 ): data is WsMessageFuturesUserDataAccountUpdateRaw {
   return !Array.isArray(data) && data.e === 'ACCOUNT_UPDATE';
+}
+
+/**
+ * Typeguard to validate if raw message is an eventStreamTerminated event
+ */
+export function isWsEventStreamTerminatedRaw(
+  data: WsRawMessage,
+): data is WsEventStreamTerminatedRaw {
+  return !Array.isArray(data) && data.e === 'eventStreamTerminated';
 }
 
 export interface WebsocketTopicSubscriptionConfirmationEvent {

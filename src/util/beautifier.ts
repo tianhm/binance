@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { WsFormattedMessage } from '../types/websockets/ws-events-formatted';
 import { BEAUTIFIER_EVENT_MAP } from './beautifier-maps';
 
