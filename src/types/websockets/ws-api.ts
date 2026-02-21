@@ -186,6 +186,7 @@ export type WsAPIOperation = (typeof WS_API_Operations)[number];
 
 export interface WsRequestOperationBinance<
   TWSTopic extends string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TWSParams extends object = any,
 > {
   method: WsOperation | WsAPIOperation;
@@ -210,6 +211,7 @@ export interface WSAPIResponse<TResponseData extends object = object> {
   wsKey: WsKey;
   isWSAPIResponse: boolean;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request?: any;
 }
 

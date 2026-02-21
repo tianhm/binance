@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import EventEmitter from 'events';
 import WebSocket from 'isomorphic-ws';
@@ -107,7 +106,7 @@ export interface EmittableEvent<
 // Type safety for on and emit handlers: https://stackoverflow.com/a/61609010/880837
 export interface BaseWebsocketClient<
   TWSKey extends string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   TWSRequestEvent extends object,
 > {
   on<U extends keyof WSClientEventMap<TWSKey>>(

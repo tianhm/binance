@@ -387,7 +387,7 @@ export class WebsocketClient extends BaseWebsocketClient<
     const promiseRef = getPromiseRefForWSAPIRequest(resolvedWsKey, signedEvent);
 
     const deferredPromise = this.getWsStore().createDeferredPromise<
-      TWSAPIResponse & { request: any }
+      TWSAPIResponse & { request: unknown }
     >(resolvedWsKey, promiseRef, false);
 
     // Enrich returned promise with request context for easier debugging

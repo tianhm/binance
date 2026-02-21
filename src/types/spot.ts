@@ -2132,6 +2132,7 @@ export interface CloudMining {
 export interface ConvertibleCoinsResponse {
   convertEnabled: boolean;
   coins: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   exchangeRates: any;
 }
 
@@ -3095,6 +3096,7 @@ export interface MarginDelistSchedule {
 }
 
 export interface MarginAvailableInventoryResponse {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assets: any;
   updateTime: number;
 }

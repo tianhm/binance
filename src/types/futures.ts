@@ -329,6 +329,7 @@ export interface FuturesExchangeInfo {
   exchangeFilters: ExchangeFilter[];
   rateLimits: RateLimiter[];
   serverTime: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assets: any[];
   symbols: FuturesSymbolExchangeInfo[];
   timezone: string;
