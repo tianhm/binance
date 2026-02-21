@@ -270,6 +270,11 @@ export interface WsMessageFuturesUserDataListenKeyExpiredRaw
   E: number;
 }
 
+export interface WsEventStreamTerminatedRaw extends WsSharedBase {
+  e: 'eventStreamTerminated';
+  E: number;
+}
+
 export interface WsMessageFuturesMarginCalledPositionRaw {
   s: string;
   ps: PositionSide;
@@ -548,6 +553,7 @@ export type WsUserDataEventsRaw =
   | WsMessageFuturesUserDataEventRaw;
 
 export type WsRawMessage =
+  | WsEventStreamTerminatedRaw
   | WsUserDataEventsRaw
   | WsMessageKlineRaw
   | WsMessageAggTradeRaw

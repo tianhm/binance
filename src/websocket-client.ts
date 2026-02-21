@@ -381,7 +381,7 @@ export class WebsocketClient extends BaseWebsocketClient<
     }
 
     // Sign, if needed
-    const signedEvent = await this.signWSAPIRequest(request);
+    const signedEvent = await this.signWSAPIRequest(request, requestFlags);
 
     // Store deferred promise, resolved within the "resolveEmittableEvents" method while parsing incoming events
     const promiseRef = getPromiseRefForWSAPIRequest(resolvedWsKey, signedEvent);
@@ -468,10 +468,16 @@ export class WebsocketClient extends BaseWebsocketClient<
     // return await signMessageWebCryptoAPI(paramsStr, secret, method, algorithm);
   }
 
+  /**
+   * Handles request sign, if connection isn't authenticated yet.
+   * If connection does not need to be authenticated or request doesn't require sign,
+   * use the requestFlags.authIsOptional flag to skip sign and send the request immediately.
+   */
   private async signWSAPIRequest<TRequestParams extends string = string>(
     requestEvent: WsRequestOperationBinance<TRequestParams>,
+    requestFlags?: WSAPIRequestFlags,
   ): Promise<WsRequestOperationBinance<TRequestParams>> {
-    if (!requestEvent.params) {
+    if (!requestEvent.params || requestFlags?.authIsOptional) {
       return requestEvent;
     }
 
@@ -1242,6 +1248,32 @@ export class WebsocketClient extends BaseWebsocketClient<
 
   public unsubscribeSpotUserDataStream(wsKey: WsKey = 'main'): Promise<void> {
     return this.closeUserDataStream(wsKey, 'spot');
+  }
+
+  public async fetchMarginListenToken(params?: {
+    symbol?: string;
+    isIsolated?: boolean;
+    validity?: number;
+  }): Promise<{
+    token: string;
+    expirationTime: number;
+  }> {
+    try {
+      const { token, expirationTime } = await this.restClientCache
+        .getSpotRestClient(
+          this.getRestClientOptions(),
+          this.options.requestOptions,
+        )
+        .getMarginListenToken(params);
+
+      return { token, expirationTime };
+    } catch (e) {
+      this.logger.error('Failed to fetch margin listen token', {
+        ...WS_LOGGER_CATEGORY,
+        error: e,
+      });
+      throw e;
+    }
   }
 
   /**

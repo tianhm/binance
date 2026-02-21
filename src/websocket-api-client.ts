@@ -96,7 +96,11 @@ import {
 } from './types/websockets/ws-api-responses';
 import { WSClientConfigurableOptions } from './types/websockets/ws-general';
 import { DefaultLogger } from './util/logger';
-import { isWSAPIWsKey, neverGuard } from './util/typeGuards';
+import {
+  isWSAPIWsKey,
+  isWsEventStreamTerminatedRaw,
+  neverGuard,
+} from './util/typeGuards';
 import {
   getTestnetWsKey,
   WS_KEY_MAP,
@@ -125,6 +129,7 @@ export interface WSAPIClientConfigurableOptions {
    * If requestSubscribeUserDataStream() was used, automatically resubscribe if reconnected
    */
   resubscribeUserDataStreamAfterReconnect: boolean;
+
   /**
    * Default: 2 seconds
    *
@@ -142,6 +147,22 @@ export interface WSAPIClientConfigurableOptions {
    * on the embedded WS Client `wsApiClient.getWSClient().on(....)`.
    */
   attachEventListeners: boolean;
+
+  /**
+   * Default: false
+   *
+   * If true, suppress the latency warning when using HMAC/RSA keys, which require per-request signing and therefore may have higher latency than Ed25519 keys. This warning is only relevant if you are making WS API requests, and not relevant if you are only using the user data stream.
+   *
+   * If you are latency sensitive, consider using Ed25519 keys instead. For more information refer to the readme.
+   */
+  muteLatencyWarning: boolean;
+
+  /**
+   * Default: true
+   *
+   * If true, the SDK will proactively refresh the margin listen token before it expires, to help ensure a more seamless experience for users who want to maintain a continuous user data stream connection in margin mode.
+   */
+  keepMarginListenTokenRefreshed: boolean;
 }
 
 /**
@@ -155,6 +176,14 @@ interface ActiveUserDataStreamState {
   subscribedAt: Date;
   subscribeAttempt: number;
   respawnTimeout?: ReturnType<typeof setTimeout>;
+  /**
+   * Timer to proactively refresh the listen key / token before it expires. Only intended for margin mode.
+   */
+  refreshTimeout?: ReturnType<typeof setTimeout>;
+  /**
+   * Optional parameters, e.g. how isolated margin mode accepts a symbol to initiate a per-symbol stream
+   */
+  userDataStreamParameters?: unknown;
 }
 
 /**
@@ -199,43 +228,16 @@ export class WebsocketAPIClient {
       resubscribeUserDataStreamAfterReconnect: true,
       resubscribeUserDataStreamDelaySeconds: 2,
       attachEventListeners: true,
+      muteLatencyWarning: false,
+      keepMarginListenTokenRefreshed: true,
       ...options,
     };
 
     this.logger = this.wsClient.logger;
 
-    this.setupDefaultEventListeners();
-
-    this.wsClient.on('reconnected', ({ wsKey }) => {
-      this.handleWSReconnectedEvent({ wsKey });
-    });
-
-    const signKeyType = this.wsClient.getSignKeyType();
-    switch (signKeyType) {
-      case undefined:
-      case 'Ed25519': {
-        break;
-      }
-      case 'HMAC':
-      case 'RSASSA-PKCS1-v1_5': {
-        this.wsClient.setAuthOnConnect(false).setAuthEveryRequest(true);
-        this.logger.info(
-          `NOTICE: Detected "${signKeyType}" API Keys.
-
-Your API key will work correctly, but with the following differences:
-- Each request will be individually signed (per-request signing mode)
-- Session authentication is NOT available for HMAC/RSA keys
-- This may result in slightly higher latency per request
-
-If you are latency sensitive, consider using Ed25519 keys instead. For more information refer to the readme: https://github.com/tiagosiebler/binance?tab=readme-ov-file#websocket-api`,
-          { ...WS_LOGGER_CATEGORY, signKeyType },
-        );
-        break;
-      }
-      default: {
-        neverGuard(signKeyType, `Unhandled sign key type "${signKeyType}"`);
-      }
-    }
+    this.setupOptionalEventListeners()
+      .setupRequiredEventListeners()
+      .setupSignMechanic();
   }
 
   public getWSClient(): WebsocketClient {
@@ -1263,12 +1265,65 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
    */
   async subscribeUserDataStream(
     wsKey: WSAPIWsKey,
+    isRefreshingToken: boolean = false,
   ): Promise<WSAPIResponse<object>> {
     const resolvedWsKey = this.options.testnet ? getTestnetWsKey(wsKey) : wsKey;
 
     const keyType = this.getWSClient().getSignKeyType();
 
     let res: WSAPIResponse<object>;
+
+    // User data stream works differently for margin, since Feb 2026, via a listen token mechanic
+    if (resolvedWsKey === WS_KEY_MAP.marginUserData) {
+      const { token, expirationTime } =
+        await this.wsClient.fetchMarginListenToken({
+          validity: 30 * 1000, // milliseconds (30 secs)
+          // validity: 5 * 60 * 1000, // milliseconds (5 mins )
+        });
+
+      this.logger.trace(
+        'subscribeUserDataStream() - fetched margin listen token, preparing to subscribe with token: ',
+        {
+          ...WS_LOGGER_CATEGORY,
+          wsKey,
+          token,
+          expirationTime,
+          expirationDt: new Date(expirationTime),
+          isRefreshingToken,
+        },
+      );
+
+      res = await this.wsClient.sendWSAPIRequest(
+        resolvedWsKey,
+        'userDataStream.subscribe.listenToken',
+        {
+          listenToken: token,
+        },
+        { authIsOptional: true },
+      );
+
+      this.subscribedUserDataStreamState[resolvedWsKey] = {
+        subscribedAt: new Date(),
+        subscribeAttempt: 0,
+      };
+
+      // Set respawn timer, to automatically fetch and sub to new token before expiry. Should be seamless on existing connection.
+      if (this.options.keepMarginListenTokenRefreshed) {
+        const hours24Ms = 24 * 60 * 60 * 1000;
+
+        // try to respawn 30 seconds before expiration
+        const respawnAfterMs =
+          (expirationTime || hours24Ms) - Date.now() - 30 * 1000;
+
+        this.subscribedUserDataStreamState[resolvedWsKey].respawnTimeout =
+          setTimeout(() => {
+            this.tryResubscribeUserDataStream(wsKey, true);
+          }, respawnAfterMs);
+      }
+
+      return res;
+    }
+
     if (keyType === 'Ed25519') {
       // for Ed25519 keys, no signature is needed, we should already be authenticated in session
       res = await this.wsClient.sendWSAPIRequest(
@@ -1329,7 +1384,7 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
    *
    */
 
-  private setupDefaultEventListeners() {
+  private setupOptionalEventListeners() {
     if (this.options.attachEventListeners) {
       /**
        * General event handlers for monitoring the WebsocketClient
@@ -1361,9 +1416,119 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
           }
         });
     }
+
+    return this;
   }
 
-  private async tryResubscribeUserDataStream(wsKey: WSAPIWsKey) {
+  private setupRequiredEventListeners() {
+    /**
+     * Required event handlers for handling automatic resubscribe to user data stream after reconnect, etc
+     */
+
+    this.wsClient
+      .on('close', ({ wsKey }) => {
+        this.handleWSCloseEvent({ wsKey });
+      })
+      .on('reconnected', ({ wsKey }) => {
+        this.handleWSReconnectedEvent({ wsKey });
+      })
+      .on('message', (data) => {
+        // Handle notification that user data stream has been terminated (e.g. due to expired listen token) and attempt to automatically resubscribe with new token
+        // Designed around margin mode mechanics: https://developers.binance.com/docs/margin_trading/trade-data-stream#response-example-1
+        if (isWsEventStreamTerminatedRaw(data)) {
+          const wsKey = data.wsKey;
+          const wsMarket = data.wsMarket;
+          const wsUserDataStreamState =
+            this.subscribedUserDataStreamState[wsKey];
+
+          if (!wsUserDataStreamState) {
+            console.warn(
+              'Received eventStreamTerminated message for a wsKey that does not have an active user data stream subscription, ignoring.',
+              {
+                ...WS_LOGGER_CATEGORY,
+                wsKey,
+                wsMarket,
+                eventData: data,
+              },
+            );
+            return;
+          }
+
+          if (wsKey === WS_KEY_MAP.marginUserData) {
+            this.logger.error(
+              'Received eventStreamTerminated message, likely due to expired listen token. Will attempt to fetch new token and resubscribe.',
+              {
+                ...WS_LOGGER_CATEGORY,
+                wsKey,
+                wsMarket,
+                eventData: data,
+              },
+            );
+
+            this.tryResubscribeUserDataStream(wsKey, false);
+            return;
+          }
+
+          this.logger.error(
+            'Fatal: Received eventStreamTerminated message for wsKey that is not known to receive this event. May not be able to automatically recover. Report this with steps to reproduce, if you see this message.',
+            {
+              ...WS_LOGGER_CATEGORY,
+              wsKey,
+              wsMarket,
+              eventData: data,
+            },
+          );
+
+          return;
+        }
+
+        // console.log(new Date(), 'ws message received: ', data);
+      });
+
+    return this;
+  }
+
+  private setupSignMechanic() {
+    const signKeyType = this.wsClient.getSignKeyType();
+    switch (signKeyType) {
+      case undefined:
+      case 'Ed25519': {
+        break;
+      }
+      case 'HMAC':
+      case 'RSASSA-PKCS1-v1_5': {
+        this.wsClient.setAuthOnConnect(false).setAuthEveryRequest(true);
+
+        if (this.options.muteLatencyWarning !== true) {
+          this.logger.info(
+            `NOTICE: Detected "${signKeyType}" API Keys.
+
+Your API key will work correctly, but with the following differences:
+- Each request will be individually signed (per-request signing mode)
+- Session authentication is NOT available for HMAC/RSA keys
+- This may result in slightly higher latency per request
+
+If you are only using the user data stream, you can ignore this warning as only applies if you are making WS API requests.
+
+If you are latency sensitive, consider using Ed25519 keys instead. For more information refer to the readme: https://github.com/tiagosiebler/binance?tab=readme-ov-file#websocket-api`,
+            { ...WS_LOGGER_CATEGORY, signKeyType },
+          );
+        }
+
+        break;
+      }
+      default: {
+        neverGuard(signKeyType, `Unhandled sign key type "${signKeyType}"`);
+      }
+    }
+
+    return this;
+  }
+
+  private async tryResubscribeUserDataStream(
+    wsKey: WSAPIWsKey,
+    isRefreshingToken: boolean,
+  ) {
     const subscribeState = this.getSubscribedUserDataStreamState(wsKey);
 
     const respawnDelayInSeconds =
@@ -1374,18 +1539,29 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
       {
         ...WS_LOGGER_CATEGORY,
         wsKey,
+        isRefreshingToken,
       },
     );
 
     try {
+      // Just in case the refresh timer is still running
+      // Harmless given one connection, but still unnecessary
+      if (this.subscribeUserDataStream[wsKey]?.refreshTimeout) {
+        clearTimeout(this.subscribeUserDataStream[wsKey].refreshTimeout);
+        delete this.subscribeUserDataStream[wsKey].refreshTimeout;
+      }
+
       if (this.subscribedUserDataStreamState[wsKey]?.respawnTimeout) {
         clearTimeout(this.subscribedUserDataStreamState[wsKey].respawnTimeout);
         delete this.subscribedUserDataStreamState[wsKey].respawnTimeout;
       }
 
       subscribeState.subscribeAttempt++;
-      await this.subscribeUserDataStream(wsKey);
 
+      const subscribeAttempts = subscribeState.subscribeAttempt;
+      await this.subscribeUserDataStream(wsKey, isRefreshingToken);
+
+      // Resolved === success:
       this.subscribedUserDataStreamState[wsKey] = {
         ...subscribeState,
         subscribedAt: new Date(),
@@ -1396,6 +1572,8 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
         ...WS_LOGGER_CATEGORY,
         ...subscribeState,
         wsKey,
+        isRefreshingToken,
+        subscribeAttempts,
       });
     } catch (e) {
       this.logger.error(
@@ -1405,11 +1583,12 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
           wsKey,
           exception: e,
           subscribeState,
+          isRefreshingToken,
         },
       );
 
       subscribeState.respawnTimeout = setTimeout(() => {
-        this.tryResubscribeUserDataStream(wsKey);
+        this.tryResubscribeUserDataStream(wsKey, isRefreshingToken);
       }, 1000 * respawnDelayInSeconds);
 
       this.subscribedUserDataStreamState[wsKey] = {
@@ -1426,6 +1605,31 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
     return subscribedState;
   }
 
+  private handleWSCloseEvent(params: { wsKey: WsKey }) {
+    const wsKey = params.wsKey;
+
+    // Not a WS API connection
+    if (!isWSAPIWsKey(wsKey)) {
+      return;
+    }
+
+    // If connection closes and we have a record of subscribing to user data stream on this connection, then we can assume it was likely an unintentional disconnect and we should attempt to resubscribe when it reconnects
+    if (this.subscribedUserDataStreamState[wsKey]) {
+      this.logger.error(
+        'handleWSCloseEvent() -> detected close on connection with active user data stream subscription, will attempt to resubscribe when it reconnects',
+        {
+          ...WS_LOGGER_CATEGORY,
+          wsKey,
+        },
+      );
+
+      if (this.subscribeUserDataStream[wsKey]?.refreshTimeout) {
+        clearTimeout(this.subscribeUserDataStream[wsKey].refreshTimeout);
+        delete this.subscribeUserDataStream[wsKey].refreshTimeout;
+      }
+    }
+  }
+
   private handleWSReconnectedEvent(params: { wsKey: WsKey }) {
     const wsKey = params.wsKey;
 
@@ -1436,13 +1640,19 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
 
     const fnName = 'handleWSReconnectedEvent()';
 
-    // For the workflow without the listen key
-    if (
-      // Feature enabled
-      this.options.resubscribeUserDataStreamAfterReconnect &&
-      // Was subscribed to user data stream (without listen key)
-      this.subscribedUserDataStreamState[wsKey]
-    ) {
+    if (!this.subscribedUserDataStreamState[wsKey]) {
+      // No record of ever subscribing to user data stream on this connection, so no need to resubscribe
+      return;
+    }
+
+    // Clear token refresh timer, just in case. No need on a dead & potentially respawning connection
+    if (this.subscribeUserDataStream[wsKey]?.refreshTimeout) {
+      clearTimeout(this.subscribeUserDataStream[wsKey].refreshTimeout);
+      delete this.subscribeUserDataStream[wsKey].refreshTimeout;
+    }
+
+    // Feature enabled
+    if (this.options.resubscribeUserDataStreamAfterReconnect) {
       // Delay existing timer, if exists
       if (this.subscribedUserDataStreamState[wsKey]?.respawnTimeout) {
         clearTimeout(this.subscribedUserDataStreamState[wsKey].respawnTimeout);
@@ -1468,7 +1678,8 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
       // Queue resubscribe workflow
       this.subscribedUserDataStreamState[wsKey].respawnTimeout = setTimeout(
         () => {
-          this.tryResubscribeUserDataStream(wsKey);
+          const isRefreshingToken = false;
+          this.tryResubscribeUserDataStream(wsKey, isRefreshingToken);
         },
         1000 * this.options.resubscribeUserDataStreamDelaySeconds,
       );

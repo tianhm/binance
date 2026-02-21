@@ -4624,6 +4624,19 @@ export class MainClient extends BaseRestClient {
   closeMarginRiskUserDataListenKey(): Promise<object> {
     return this.delete('sapi/v1/margin/listen-key');
   }
+
+  /**
+   * Get/create margin account listenToken for the user data stream
+   * https://developers.binance.com/docs/margin_trading/trade-data-stream
+   */
+  getMarginListenToken(params?: {
+    symbol?: string;
+    isIsolated?: boolean;
+    validity?: number;
+  }): Promise<{ token: string; expirationTime: number }> {
+    return this.postPrivate('sapi/v1/userListenToken', params);
+  }
+
   /**
    *
    * DEPRECATED ENDPOINTS
