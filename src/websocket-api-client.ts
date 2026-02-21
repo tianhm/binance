@@ -1277,7 +1277,7 @@ export class WebsocketAPIClient {
     if (resolvedWsKey === WS_KEY_MAP.marginUserData) {
       const { token, expirationTime } =
         await this.wsClient.fetchMarginListenToken({
-          validity: 30 * 1000, // milliseconds (30 secs)
+          // validity: 30 * 1000, // milliseconds (30 secs)
           // validity: 5 * 60 * 1000, // milliseconds (5 mins )
         });
 
