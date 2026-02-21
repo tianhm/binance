@@ -194,7 +194,8 @@ describe('Private Spot REST API Endpoints', () => {
     });
   });
 
-  describe('User Data Stream', () => {
+  // Spot & margin user data streams have been deprecated formally. Use the WebSocket API client with the `subscribeUserDataStream()` method instead
+  describe.skip('User Data Stream', () => {
     describe('Binance Spot', () => {
       it('should create a user data key', async () => {
         const { listenKey } = await api.getSpotUserDataListenKey();
