@@ -1011,7 +1011,7 @@ export interface FuturesNewAlgoOrderParams {
   closePosition?: BooleanString;
   priceProtect?: BooleanString;
   reduceOnly?: BooleanString;
-  activationPrice?: numberInString;
+  activatePrice?: numberInString;
   callbackRate?: numberInString;
   clientAlgoId?: string; // ^[\.A-Z\:/a-z0-9_-]{1,36}$
   selfTradePreventionMode?: SelfTradePreventionMode;
