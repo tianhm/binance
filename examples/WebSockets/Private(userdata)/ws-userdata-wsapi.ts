@@ -141,7 +141,7 @@ async function main() {
   // Optional, hook and customise logging behavior
   const logger = {
     ...DefaultLogger,
-    trace: (msg: string, context?: any) => {
+    trace: (msg: string, context?: unknown) => {
       if (ignoredTraceLogMsgs.includes(msg)) {
         return;
       }
