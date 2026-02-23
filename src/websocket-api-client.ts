@@ -110,6 +110,7 @@ import {
   WSAPIWsKeyMain,
   WsKey,
 } from './util/websockets/websocket-util';
+import { WSConnectedResult } from './util/websockets/WsStore.types';
 import { WebsocketClient } from './websocket-client';
 
 function getFuturesMarketWsKey(market: 'usdm' | 'coinm'): WSAPIWsKeyFutures {
@@ -177,7 +178,7 @@ interface ActiveUserDataStreamState {
   subscribeAttempt: number;
   respawnTimeout?: ReturnType<typeof setTimeout>;
   /**
-   * Timer to proactively refresh the listen key / token before it expires. Only intended for margin mode.
+   * Timer to proactively refresh the listen key / token before it expires. Only intended for margin & futures user data streams.
    */
   refreshTimeout?: ReturnType<typeof setTimeout>;
   /**
@@ -1259,6 +1260,25 @@ export class WebsocketAPIClient {
   }
 
   /**
+   * Consolidated method to clear any timers related to user data stream subscriptions for a given wsKey, if found.
+   *
+   * @param wsKey
+   */
+  clearUserDataStreamTimers(wsKey: WSAPIWsKey) {
+    // Just in case the refresh timer is still running
+    // Harmless given one connection, but still unnecessary
+    if (this.subscribeUserDataStream[wsKey]?.refreshTimeout) {
+      clearTimeout(this.subscribeUserDataStream[wsKey].refreshTimeout);
+      delete this.subscribeUserDataStream[wsKey].refreshTimeout;
+    }
+
+    if (this.subscribedUserDataStreamState[wsKey]?.respawnTimeout) {
+      clearTimeout(this.subscribedUserDataStreamState[wsKey].respawnTimeout);
+      delete this.subscribedUserDataStreamState[wsKey].respawnTimeout;
+    }
+  }
+
+  /**
    * Request user data stream subscription on the currently authenticated connection.
    *
    * If reconnected, this will automatically resubscribe unless you unsubscribe manually.
@@ -1266,7 +1286,7 @@ export class WebsocketAPIClient {
   async subscribeUserDataStream(
     wsKey: WSAPIWsKey,
     isRefreshingToken: boolean = false,
-  ): Promise<WSAPIResponse<object>> {
+  ): Promise<WSAPIResponse<object> | WSConnectedResult | undefined> {
     const resolvedWsKey = this.options.testnet ? getTestnetWsKey(wsKey) : wsKey;
 
     const keyType = this.getWSClient().getSignKeyType();
@@ -1322,6 +1342,44 @@ export class WebsocketAPIClient {
       }
 
       return res;
+    }
+
+    const FUTURES_USER_DATA_WARNING = `Note: For the ${wsKey} user data stream, only the start/ping/stop commands are currently available for managing the active listenKey. The SDK will now automatically start the traditional listenKey user data stream instead. You can also directly use the WebsocketClient's subscribeUsdFuturesUserDataStream()/subscribeCoinFuturesUserDataStream() methods if preferred.`;
+
+    if (
+      wsKey === WS_KEY_MAP.usdmWSAPI ||
+      wsKey === WS_KEY_MAP.usdmWSAPITestnet
+    ) {
+      this.logger.info(FUTURES_USER_DATA_WARNING, {
+        ...WS_LOGGER_CATEGORY,
+        wsKey,
+      });
+
+      await this.getWSClient().subscribeUsdFuturesUserDataStream(
+        wsKey === WS_KEY_MAP.usdmWSAPI
+          ? WS_KEY_MAP.usdm
+          : WS_KEY_MAP.usdmTestnet,
+      );
+
+      return;
+    }
+
+    if (
+      wsKey === WS_KEY_MAP.coinmWSAPI ||
+      wsKey === WS_KEY_MAP.coinmWSAPITestnet
+    ) {
+      this.logger.info(FUTURES_USER_DATA_WARNING, {
+        ...WS_LOGGER_CATEGORY,
+        wsKey,
+      });
+
+      await this.getWSClient().subscribeCoinFuturesUserDataStream(
+        wsKey === WS_KEY_MAP.coinmWSAPI
+          ? WS_KEY_MAP.coinm
+          : WS_KEY_MAP.coinmTestnet,
+      );
+
+      return;
     }
 
     if (keyType === 'Ed25519') {
@@ -1545,28 +1603,12 @@ If you are latency sensitive, consider using Ed25519 keys instead. For more info
 
     try {
       // Just in case the refresh timer is still running
-      // Harmless given one connection, but still unnecessary
-      if (this.subscribeUserDataStream[wsKey]?.refreshTimeout) {
-        clearTimeout(this.subscribeUserDataStream[wsKey].refreshTimeout);
-        delete this.subscribeUserDataStream[wsKey].refreshTimeout;
-      }
-
-      if (this.subscribedUserDataStreamState[wsKey]?.respawnTimeout) {
-        clearTimeout(this.subscribedUserDataStreamState[wsKey].respawnTimeout);
-        delete this.subscribedUserDataStreamState[wsKey].respawnTimeout;
-      }
+      this.clearUserDataStreamTimers(wsKey);
 
       subscribeState.subscribeAttempt++;
 
       const subscribeAttempts = subscribeState.subscribeAttempt;
       await this.subscribeUserDataStream(wsKey, isRefreshingToken);
-
-      // Resolved === success:
-      this.subscribedUserDataStreamState[wsKey] = {
-        ...subscribeState,
-        subscribedAt: new Date(),
-        subscribeAttempt: 0,
-      };
 
       this.logger.info('tryResubscribeUserDataStream()->ok', {
         ...WS_LOGGER_CATEGORY,
