@@ -818,7 +818,7 @@ export class PortfolioClient extends BaseRestClient {
       !params[orderIdProperty].startsWith(expectedOrderIdPrefix1) &&
       !params[orderIdProperty].startsWith(expectedOrderIdPrefix2)
     ) {
-      logInvalidOrderId(orderIdProperty, expectedOrderIdPrefix2, params);
+      logInvalidOrderId(orderIdProperty, expectedOrderIdPrefix1, params);
     }
   }
 

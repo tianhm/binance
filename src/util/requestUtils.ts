@@ -138,7 +138,7 @@ export function getOrderIdPrefix(
 
 export function generateNewOrderId(network: BinanceBaseUrlKey): string {
   const id = nanoid(22); // must pass ^[\.A-Z\:/a-z0-9_-]{1,32}$ with prefix
-  const prefixedId = 'x-' + getOrderIdPrefix(network, 'v2') + id;
+  const prefixedId = 'x-' + getOrderIdPrefix(network, 'v1') + id;
 
   return prefixedId;
 }
